@@ -2,12 +2,14 @@ window.addEventListener('load', () => {
 	const canvas = document.getElementById('canvas1');
 	const ctx = canvas.getContext('2d');
 
-	canvas.width = 800;
+	canvas.width = 1300;
 	canvas.height = 720;
 
 	let enemies = [];
 	let score = 0;
 	let gameOver = false;
+
+	const fullscreenButton = document.getElementById('fullScreenButton');
 
 
 	// в данном классе слушем событие нажатия клавиатуры
@@ -17,15 +19,36 @@ window.addEventListener('load', () => {
 	class InputHandler {
 		constructor() {
 			this.keys = [];
+			this.touchY = 0;
+
+			// Параметр, по которому будем вычислять допустимую длину свайпа, после которого будем что-то делать
+			this.touchTreshold = 30;
 			window.addEventListener('keydown', (e) => {
 				if ((e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !this.keys.includes(e.key)) {
 					this.keys.push(e.key);
-				}
+				} else if (e.key === 'Enter' && gameOver) restartGame();
 			})
 			window.addEventListener('keyup', (e) => {
 				if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
 					this.keys.splice(this.keys.indexOf(e.key), 1);
 				}
+			})
+			window.addEventListener('touchstart', (e) => {
+				this.touchY = e.changedTouches[0].pageY;
+			})
+			window.addEventListener('touchmove', (e) => {
+				const swipeDistance = e.changedTouches[0].pageY - this.touchY;
+
+				// Если мы проскролили больше 30px - регистрируем событие свайпа вверх
+				if (swipeDistance < -this.touchTreshold && !this.keys.includes('swipe up')) this.keys.push('swipe up');
+				else if (swipeDistance > this.touchTreshold && !this.keys.includes('swipe down')) {
+					this.keys.push('swipe down');
+					if (gameOver) restartGame();
+				}
+			})
+			window.addEventListener('touchend', (e) => {
+				this.keys.splice(this.keys.indexOf('swipe up'), 1);
+				this.keys.splice(this.keys.indexOf('swipe down'), 1);
 			})
 		}
 	}
@@ -36,7 +59,7 @@ window.addEventListener('load', () => {
 			this.gameHeight = gameHeight;
 			this.width = 200;
 			this.height = 200;
-			this.x = 0;
+			this.x = 100;
 			this.y = this.gameHeight - this.height;
 
 			this.frameX = 0;
@@ -55,20 +78,26 @@ window.addEventListener('load', () => {
 			this.image = document.getElementById('playerImage');
 		}
 
+		restart() {
+			this.x = 100;
+			this.y = this.gameHeight - this.height;
+			this.frameY = 0;
+			this.maxFrame = 8;
+		}
+
 		draw(context) {
 			context.drawImage(this.image, this.frameX * this.width, this.frameY * this.height, this.width, this.height, this.x, this.y, this.width, this.height);
 		}
 		update(input, deltaTime, enemies) {
 			// collision detection
 			enemies.forEach(enemy => {
-				const dx = (enemy.x + enemy.width / 2) - (this.x + this.width / 2);
-				const dy = (enemy.y + enemy.height / 2) - (this.y + this.height / 2);
+				const dx = (enemy.x + enemy.width / 2 - 20) - (this.x + this.width / 2);
+				const dy = (enemy.y + enemy.height / 2) - (this.y + this.height / 2 + 20);
 				const distance = Math.sqrt(dx * dx + dy * dy);
 				// const distance2 = Math.hypot(dy, dx); // можно таким способом, вычисление то же - ищем гипотенузу
 
-				if (distance < enemy.width / 2 + this.width / 2) {
+				if (distance < enemy.width / 3 + this.width / 3) {
 					gameOver = true;
-					console.log('collision');
 				}
 			})
 
@@ -85,7 +114,7 @@ window.addEventListener('load', () => {
 			// controls
 			if (input.keys.includes("ArrowRight")) this.speed = 5;
 			else if (input.keys.includes("ArrowLeft")) this.speed = -5;
-			else if (input.keys.includes("ArrowUp") && this.onGround()) this.vy -= 30;
+			else if ((input.keys.includes("ArrowUp") || input.keys.includes("swipe up")) && this.onGround()) this.vy -= 30;
 			else this.speed = 0;
 
 			// Горизонтальное движение
@@ -133,6 +162,10 @@ window.addEventListener('load', () => {
 			this.speed = 10;
 
 			this.image = document.getElementById('backgroundImage');
+		}
+
+		restart() {
+			this.x = 0;
 		}
 		draw(context) {
 
@@ -206,6 +239,7 @@ window.addEventListener('load', () => {
 	}
 
 	function displayStatusText(context) {
+		context.textAlign = 'left';
 		context.fillStyle = '#000';
 		context.font = '40px Helvetica';
 		context.fillText(`Score: ${score}`, 20, 50);
@@ -216,15 +250,39 @@ window.addEventListener('load', () => {
 		if (gameOver) {
 			context.textAlign = 'center';
 			context.fillStyle = '#000';
-			context.fillText('GAME OVER, try again!', canvas.width / 2, 200);
+			context.fillText('GAME OVER, press enter or swipe down to restart!', canvas.width / 2, 200);
 			context.fillStyle = '#fff';
-			context.fillText('GAME OVER, try again!', canvas.width / 2 + 2, 202);
+			context.fillText('GAME OVER, press enter or swipe down to restart!', canvas.width / 2 + 2, 202);
 		}
 	}
 
 	const input = new InputHandler();
 	const player = new Player(canvas.width, canvas.height);
 	const background = new Background(canvas.width, canvas.height);
+
+	function restartGame() {
+		player.restart();
+		background.restart();
+
+		enemies = [];
+		score = 0;
+		gameOver = false;
+
+		// После сброса всех параметров - заново нужно запустить перерисовку канваса
+		animate(0);
+	}
+
+	function toggleFullScreen() {
+		if (!document.fullscreenElement) {
+			canvas.requestFullscreen().catch(err => {
+				alert(`Error, can't enable full-screen mode: ${err.message}`);
+			});
+		} else {
+			document.exitFullscreen();
+		}
+	}
+
+	fullscreenButton.addEventListener('click', toggleFullScreen);
 
 	let lastTime = 0;
 	let enemyTimer = 0;
