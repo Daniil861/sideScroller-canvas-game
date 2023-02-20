@@ -173,7 +173,7 @@ window.addEventListener('load', () => {
 
 		update(deltaTime) {
 			if (this.frameTimer > this.frameInterval) {
-				if (this.frameX > this.maxFrame) this.frameX = 0;
+				if (this.frameX >= this.maxFrame) this.frameX = 0;
 				else this.frameX++;
 				this.frameTimer = 0;
 			} else {
